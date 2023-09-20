@@ -10,14 +10,16 @@ local screenWidth, screenHeight
 screenHeight = 1056
 screenWidth = 1920
 local player = Player.init(screenWidth/2, screenHeight/2)
-local weapon = Weapon.init("Trench Shotgun", (player.x + 50), (player.y + 40), "buck")
+local weapon = Weapon.init("Fists", (player.x + (player.width/2) - 10), (player.y + (player.height/2)))
 local timerWeapon = 0
 local reloadTimer = 0
+tileSize = 64
 
 -- Initialize game state, variables, and libraries
 function love.load()
     -- Set up the game window
     reloading = false
+    meleeTimer = 0
     gameMap = sti('maps/test_map.lua')
     gameMap:resize(1920,1056)
     world:add(player, player.x, player.y, player.width, player.height)
@@ -57,14 +59,14 @@ function love.update(dt)
     if(reloading) then
         reloadTimer = reloadTimer + dt
     end
-    if(reloadTimer >= weapon.reloadTime) then
+    if(weapon.isMelee == nil and reloadTimer >= weapon.reloadTime) then
         weapon.clip = weapon.ammo
         reloading = false
         reloadTimer = 0
     end
 
-    weapon.x = (player.x + 50)
-    weapon.y = (player.y+40)
+    weapon.x = (player.x + (player.width/2) - 10)
+    weapon.y = (player.y + (player.height/2))
     local vx = 0
     local vy = 0
     if moveLeft then
@@ -97,16 +99,25 @@ function love.update(dt)
         return item.isBox
     end
     for i = #activeBullets, 1, -1 do
+        if(not(weapon.isMelee == nil)) then
+            local distanceSquared = ((activeBullets[i].x - weapon.x)^2 + (activeBullets[i].y - weapon.y)^2)^0.5
+            if (distanceSquared >= weapon.range * tileSize) then
+                world:remove(activeBullets[i])
+                table.remove (activeBullets, i)
+                break
+            end
+        end
         world:update(activeBullets[i], activeBullets[i].x, activeBullets[i].y, activeBullets[i].width, activeBullets[i].height)
         activeBullets[i].x = activeBullets[i].x + (activeBullets[i].speed*dt)*(math.cos(activeBullets[i].angle))
         activeBullets[i].y = activeBullets[i].y + (activeBullets[i].speed*dt)*(math.sin(activeBullets[i].angle))
+            
         local cols, len = world:queryRect(activeBullets[i].x, activeBullets[i].y, activeBullets[i].width, activeBullets[i].height, filterFunc)
         local hitEnemy = cols[1]
         if len > 0 then
             -- Bullet has hit an enemy, handle the collision here
+            hitEnemy.health = hitEnemy.health - activeBullets[i].damage
             world:remove(activeBullets[i])
             table.remove (activeBullets, i)
-            hitEnemy.health = hitEnemy.health - 5
             break
         end
         local cols2, len2 = world:queryRect(activeBullets[i].x, activeBullets[i].y, activeBullets[i].width, activeBullets[i].height, filterCol)
@@ -140,7 +151,9 @@ function love.draw()
         love.graphics.draw(enemy.sprite, enemy.x, enemy.y)
         love.graphics.print("HP: " .. enemy.health, enemy.x, enemy.y - 10)
     end
-    love.graphics.draw(weapon.sprite, weapon.x, weapon.y)
+    if(weapon.isMelee == nil) then
+        love.graphics.draw(weapon.sprite, weapon.x, weapon.y)
+    end
     -- Draw the game map
     
     -- Draw game entities (player, enemies, items, etc.)
@@ -194,16 +207,16 @@ function weaponUse(type, x, y, button)
         ["Trench Shotgun"] = function()
             if(timerWeapon >= weapon.cooldown and button == 1 and weapon.clip > 0) then 
                 local spread = 0.08
-                local bullet = Bullet.init("buck", true, weapon.x, weapon.y, x, y)
+                local bullet = Bullet.init(weapon.bulletType, true, weapon.x, weapon.y, x, y)
                 world:add(bullet, bullet.x, bullet.y, bullet.width, bullet.height)
                 table.insert(activeBullets, bullet)
                 local r = math.random(-100, 100)
-                local bullet2 = Bullet.init("buck", true, weapon.x, weapon.y, x, y)
+                local bullet2 = Bullet.init(weapon.bulletType, true, weapon.x, weapon.y, x, y)
                 world:add(bullet2, bullet2.x, bullet2.y, bullet2.width, bullet2.height)
                 bullet2.angle= bullet2.angle + ((spread/100)*r)
                 table.insert(activeBullets, bullet2)
                 r = math.random(-100, 100)
-                local bullet3 = Bullet.init("buck", true, weapon.x, weapon.y, x, y)
+                local bullet3 = Bullet.init(weapon.bulletType, true, weapon.x, weapon.y, x, y)
                 world:add(bullet3, bullet3.x, bullet3.y, bullet3.width, bullet3.height)
                 bullet3.angle= bullet3.angle + ((spread/100)*r)
                 table.insert(activeBullets, bullet3)
@@ -212,17 +225,17 @@ function weaponUse(type, x, y, button)
             elseif(timerWeapon >= (weapon.cooldown-1.25) and button == 2 and weapon.clip > 0) then
                 local spread = 0.16
                 local r = math.random(-100, 100)
-                local bullet = Bullet.init("buck", true, weapon.x, weapon.y, x, y)
+                local bullet = Bullet.init(weapon.bulletType, true, weapon.x, weapon.y, x, y)
                 bullet.angle = bullet.angle + ((spread/100)*r)
                 world:add(bullet, bullet.x, bullet.y, bullet.width, bullet.height)
                 table.insert(activeBullets, bullet)
                 r = math.random(-100, 100)
-                local bullet2 = Bullet.init("buck", true, weapon.x, weapon.y, x, y)
+                local bullet2 = Bullet.init(weapon.bulletType, true, weapon.x, weapon.y, x, y)
                 world:add(bullet2, bullet2.x, bullet2.y, bullet2.width, bullet2.height)
                 bullet2.angle= bullet2.angle + ((spread/100)*r)
                 table.insert(activeBullets, bullet2)
                 r = math.random(-100, 100)
-                local bullet3 = Bullet.init("buck", true, weapon.x, weapon.y, x, y)
+                local bullet3 = Bullet.init(weapon.bulletType, true, weapon.x, weapon.y, x, y)
                 world:add(bullet3, bullet3.x, bullet3.y, bullet3.width, bullet3.height)
                 bullet3.angle= bullet3.angle + ((spread/100)*r)
                 table.insert(activeBullets, bullet3)
@@ -230,6 +243,22 @@ function weaponUse(type, x, y, button)
                 timerWeapon = 0
             elseif(weapon.clip <= 0) then
                 reloading = true
+            end
+        end,
+        ["Fists"] = function()
+            if (timerWeapon >= weapon.cooldown and button == 1) then
+                weapon.range = weapon.trueRange
+                local bullet = Bullet.init(weapon.bulletType, true, weapon.x, weapon.y, x, y)
+                world:add(bullet, bullet.x, bullet.y, bullet.width, bullet.height)
+                table.insert(activeBullets, bullet)
+                timerWeapon = 0
+            elseif (timerWeapon >= weapon.cooldown + 1 and button == 2) then
+                weapon.range = weapon.altRange
+                local bullet = Bullet.init(weapon.bulletType, true, weapon.x, weapon.y, x, y)
+                bullet.damage = bullet.damage * 2
+                world:add(bullet, bullet.x, bullet.y, bullet.width, bullet.height)
+                table.insert(activeBullets, bullet)
+                timerWeapon = 0
             end
         end,
 

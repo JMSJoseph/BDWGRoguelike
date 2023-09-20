@@ -1,12 +1,11 @@
 local Weapon = {}
 
-function Weapon.init(type, startX, startY, bulletType)
+function Weapon.init(type, startX, startY)
     local weapon = 
     {
         type = type,
         x = startX,
         y = startY,
-        bulletType = bulletType,
         
     }
 
@@ -16,6 +15,15 @@ function Weapon.init(type, startX, startY, bulletType)
         weapon.clip = 8
         weapon.ammo = 8
         weapon.reloadTime = 3
+        weapon.bulletType = "buck"
+    end
+    if(type == "Fists") then
+        weapon.cooldown = .5
+        weapon.isMelee = true
+        weapon.bulletType = "fists"
+        weapon.trueRange = 1
+        weapon.range = 1
+        weapon.altRange = 0.5
     end
 
     return weapon

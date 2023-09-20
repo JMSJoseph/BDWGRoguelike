@@ -17,6 +17,14 @@ function Bullet.init(type, good, startX, startY, targetX, targetY)
         bullet.speed = 500
         bullet.width = bullet.sprite:getWidth()
         bullet.height = bullet.sprite:getHeight()
+        bullet.damage = 5
+    end
+    if(type == "fists") then
+        bullet.sprite = love.graphics.newImage("sprites/weapons/bullet/meleetest.png")
+        bullet.speed = 1000
+        bullet.width = bullet.sprite:getWidth()
+        bullet.height = bullet.sprite:getHeight()
+        bullet.damage = 5
     end
 
     return bullet
