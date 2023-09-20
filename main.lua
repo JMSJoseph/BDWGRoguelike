@@ -4,20 +4,20 @@ local Enemy = require("enemy")
 local Weapon = require("weapon")
 local Bullet = require("bullet")
 local bump = require("lib/bump")
-sti = require("lib/sti")
-local world = bump.newWorld()
-local screenWidth, screenHeight
-screenHeight = 1056
-screenWidth = 1920
-local player = Player.init(screenWidth/2, screenHeight/2)
-local weapon = Weapon.init("Fists", (player.x + (player.width/2) - 10), (player.y + (player.height/2)))
-local timerWeapon = 0
-local reloadTimer = 0
-tileSize = 64
+local sti = require("lib/sti")
+
 
 -- Initialize game state, variables, and libraries
 function love.load()
     -- Set up the game window
+    world = bump.newWorld()
+    screenHeight = 1056
+    screenWidth = 1920
+    player = Player.init(screenWidth/2, screenHeight/2)
+    weapon = Weapon.init("Trench Shotgun", 0, 0)
+    timerWeapon = 0
+    reloadTimer = 0
+    tileSize = 64
     reloading = false
     meleeTimer = 0
     gameMap = sti('maps/test_map.lua')
@@ -55,83 +55,11 @@ end
 function love.update(dt)
     -- Handle player input (keyboard, mouse, etc.)
     -- Update game objects and entities
-    timerWeapon = timerWeapon + dt
-    if(reloading) then
-        reloadTimer = reloadTimer + dt
-    end
-    if(weapon.isMelee == nil and reloadTimer >= weapon.reloadTime) then
-        weapon.clip = weapon.ammo
-        reloading = false
-        reloadTimer = 0
-    end
-
-    weapon.x = (player.x + (player.width/2) - 10)
-    weapon.y = (player.y + (player.height/2))
-    local vx = 0
-    local vy = 0
-    if moveLeft then
-        vx = -1 * (player.speed*dt)
-    end
-    if moveRight then
-        vx = (player.speed*dt)
-    end
-    if moveDown then
-        vy = (player.speed*dt)
-    end
-    if moveUp then
-        vy = -1 * (player.speed*dt)
-    end
-    local function playerCollisionFilter(item, other)
-        if other.isBox then
-            return 'slide'
-        end
-        return 'cross' 
-    end
-    local newX, newY, cols, len = world:move(player, player.x + vx, player.y + vy, playerCollisionFilter)
-    player.x, player.y = newX, newY
-    for _, col in ipairs(cols) do
-        
-    end 
-    local filterFunc = function(item)
-        return item.isEnemy
-    end
-    local filterCol = function(item)
-        return item.isBox
-    end
-    for i = #activeBullets, 1, -1 do
-        if(not(weapon.isMelee == nil)) then
-            local distanceSquared = ((activeBullets[i].x - weapon.x)^2 + (activeBullets[i].y - weapon.y)^2)^0.5
-            if (distanceSquared >= weapon.range * tileSize) then
-                world:remove(activeBullets[i])
-                table.remove (activeBullets, i)
-                break
-            end
-        end
-        world:update(activeBullets[i], activeBullets[i].x, activeBullets[i].y, activeBullets[i].width, activeBullets[i].height)
-        activeBullets[i].x = activeBullets[i].x + (activeBullets[i].speed*dt)*(math.cos(activeBullets[i].angle))
-        activeBullets[i].y = activeBullets[i].y + (activeBullets[i].speed*dt)*(math.sin(activeBullets[i].angle))
-            
-        local cols, len = world:queryRect(activeBullets[i].x, activeBullets[i].y, activeBullets[i].width, activeBullets[i].height, filterFunc)
-        local hitEnemy = cols[1]
-        if len > 0 then
-            -- Bullet has hit an enemy, handle the collision here
-            hitEnemy.health = hitEnemy.health - activeBullets[i].damage
-            world:remove(activeBullets[i])
-            table.remove (activeBullets, i)
-            break
-        end
-        local cols2, len2 = world:queryRect(activeBullets[i].x, activeBullets[i].y, activeBullets[i].width, activeBullets[i].height, filterCol)
-        if len2 > 0 then
-            world:remove(activeBullets[i])
-            table.remove (activeBullets, i)
-        end
-    end
-    for i = #activeEnemies, 1, -1 do
-        if(activeEnemies[i].health <= 0) then
-            world:remove(activeEnemies[i])
-            table.remove(activeEnemies, i)
-        end
-    end
+    weaponLogic(dt)
+    weaponPosition(dt, weapon.type)
+    playerMovement(dt)
+    bulletLogic(dt)
+    enemyLogic(dt)
 
     
     -- Check for collisions and resolve them
@@ -201,6 +129,21 @@ function love.keyreleased(key)
 
 end
 
+function weaponPosition(dt, type)
+    local typeTable =
+    {
+        ["Trench Shotgun"] = function()
+            weaponX = (player.x+(player.width/1.3))
+            weaponY = (player.y+(player.height/3))
+            weapon.x = weaponX
+            weapon.y = weaponY
+        end,  
+    }
+    if (typeTable[type]) then
+        typeTable[type]()
+    end
+end
+
 function weaponUse(type, x, y, button)
     local typeTable =
     {
@@ -265,6 +208,92 @@ function weaponUse(type, x, y, button)
     }
     if (typeTable[type]) then
         typeTable[type]()
+    end
+end
+
+function playerMovement(dt)
+    local vx = 0
+    local vy = 0
+    if moveLeft then
+        vx = -1 * (player.speed*dt)
+    end
+    if moveRight then
+        vx = (player.speed*dt)
+    end
+    if moveDown then
+        vy = (player.speed*dt)
+    end
+    if moveUp then
+        vy = -1 * (player.speed*dt)
+    end
+    local function playerCollisionFilter(item, other)
+        if other.isBox then
+            return 'slide'
+        end
+        return 'cross' 
+    end
+    local newX, newY, cols, len = world:move(player, player.x + vx, player.y + vy, playerCollisionFilter)
+    player.x, player.y = newX, newY
+    for _, col in ipairs(cols) do
+        
+    end 
+end
+
+function bulletLogic(dt)
+    local filterFunc = function(item)
+        return item.isEnemy
+    end
+    local filterCol = function(item)
+        return item.isBox
+    end
+    for i = #activeBullets, 1, -1 do
+        if(not(weapon.isMelee == nil)) then
+            local distanceSquared = ((activeBullets[i].x - weapon.x)^2 + (activeBullets[i].y - weapon.y)^2)^0.5
+            if (distanceSquared >= weapon.range * tileSize) then
+                world:remove(activeBullets[i])
+                table.remove (activeBullets, i)
+                break
+            end
+        end
+        world:update(activeBullets[i], activeBullets[i].x, activeBullets[i].y, activeBullets[i].width, activeBullets[i].height)
+        activeBullets[i].x = activeBullets[i].x + (activeBullets[i].speed*dt)*(math.cos(activeBullets[i].angle))
+        activeBullets[i].y = activeBullets[i].y + (activeBullets[i].speed*dt)*(math.sin(activeBullets[i].angle))
+            
+        local cols, len = world:queryRect(activeBullets[i].x, activeBullets[i].y, activeBullets[i].width, activeBullets[i].height, filterFunc)
+        local hitEnemy = cols[1]
+        if len > 0 then
+            -- Bullet has hit an enemy, handle the collision here
+            hitEnemy.health = hitEnemy.health - activeBullets[i].damage
+            world:remove(activeBullets[i])
+            table.remove (activeBullets, i)
+            break
+        end
+        local cols2, len2 = world:queryRect(activeBullets[i].x, activeBullets[i].y, activeBullets[i].width, activeBullets[i].height, filterCol)
+        if len2 > 0 then
+            world:remove(activeBullets[i])
+            table.remove (activeBullets, i)
+        end
+    end
+end
+
+function enemyLogic(dt)
+    for i = #activeEnemies, 1, -1 do
+        if(activeEnemies[i].health <= 0) then
+            world:remove(activeEnemies[i])
+            table.remove(activeEnemies, i)
+        end
+    end
+end
+
+function weaponLogic(dt)
+    timerWeapon = timerWeapon + dt
+    if(reloading) then
+        reloadTimer = reloadTimer + dt
+    end
+    if(weapon.isMelee == nil and reloadTimer >= weapon.reloadTime) then
+        weapon.clip = weapon.ammo
+        reloading = false
+        reloadTimer = 0
     end
 end
 
