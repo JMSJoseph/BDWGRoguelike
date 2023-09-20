@@ -234,39 +234,35 @@ function playerMovement(dt)
 end
 
 function bulletLogic(dt)
-    local filterFunc = function(item)
-        return item.isEnemy
-    end
-    local filterCol = function(item)
-        return item.isBox
-    end
     for i = #activeBullets, 1, -1 do
+        local curBullet = activeBullets[i]
+        local remove = false
         if(not(weapon.isMelee == nil)) then
-            local distanceSquared = ((activeBullets[i].x - weapon.x)^2 + (activeBullets[i].y - weapon.y)^2)^0.5
+            local distanceSquared = ((curBullet.x - weapon.x)^2 + (curBullet.y - weapon.y)^2)^0.5
             if (distanceSquared >= weapon.range * tileSize) then
-                world:remove(activeBullets[i])
-                table.remove (activeBullets, i)
-                break
+                remove = true
             end
         end
-        world:update(activeBullets[i], activeBullets[i].x, activeBullets[i].y, activeBullets[i].width, activeBullets[i].height)
-        activeBullets[i].x = activeBullets[i].x + (activeBullets[i].speed*dt)*(math.cos(activeBullets[i].angle))
-        activeBullets[i].y = activeBullets[i].y + (activeBullets[i].speed*dt)*(math.sin(activeBullets[i].angle))
-            
-        local cols, len = world:queryRect(activeBullets[i].x, activeBullets[i].y, activeBullets[i].width, activeBullets[i].height, filterFunc)
-        local hitEnemy = cols[1]
-        if len > 0 then
-            -- Bullet has hit an enemy, handle the collision here
-            hitEnemy.health = hitEnemy.health - activeBullets[i].damage
-            world:remove(activeBullets[i])
-            table.remove (activeBullets, i)
-            break
+        local vx = (curBullet.speed*dt)*(math.cos(curBullet.angle))
+        local vy = (curBullet.speed*dt)*(math.sin(curBullet.angle))
+        local function bulletCollisionFilter(item, other)
+            return 'cross'
         end
-        local cols2, len2 = world:queryRect(activeBullets[i].x, activeBullets[i].y, activeBullets[i].width, activeBullets[i].height, filterCol)
-        if len2 > 0 then
-            world:remove(activeBullets[i])
+        local newX, newY, cols, len = world:move(curBullet, curBullet.x + vx, curBullet.y + vy, bulletCollisionFilter)
+        curBullet.x, curBullet.y = newX, newY
+        for i=1,len do
+            if not(cols[i].other.isEnemy == nil) then
+                cols[i].other.health = cols[i].other.health - curBullet.damage
+                remove = true
+            elseif not(cols[i].other.isBox == nil) then
+                remove = true
+            end
+        end
+        if(remove) then
+            world:remove(curBullet)
             table.remove (activeBullets, i)
         end
+
     end
 end
 
