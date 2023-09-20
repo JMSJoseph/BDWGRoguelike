@@ -11,6 +11,7 @@ screenHeight = 1056
 screenWidth = 1920
 local player = Player.init(screenWidth/2, screenHeight/2)
 local weapon = Weapon.init("Trench Shotgun", (player.x + 50), (player.y + 40), "buck")
+local timerWeapon = 0
 
 -- Initialize game state, variables, and libraries
 function love.load()
@@ -50,6 +51,7 @@ end
 function love.update(dt)
     -- Handle player input (keyboard, mouse, etc.)
     -- Update game objects and entities
+    timerWeapon = timerWeapon + dt
     weapon.x = (player.x + 50)
     weapon.y = (player.y+40)
     local vx = 0
@@ -200,7 +202,10 @@ end
 function love.mousepressed(x, y, button)
     -- Handle mouse interactions (e.g., clicking on items)
     if button == 1 then
-        weaponUse(weapon.type, x, y)
+        if(timerWeapon >= weapon.cooldown) then
+            weaponUse(weapon.type, x, y)
+            timerWeapon = 0
+        end
     end
     if button == 2 then
         local enemy = Enemy.init("Dummy", player.x, player.y)
