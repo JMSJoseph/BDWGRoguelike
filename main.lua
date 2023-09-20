@@ -150,38 +150,32 @@ function weaponUse(type, x, y, button)
         ["Trench Shotgun"] = function()
             if(timerWeapon >= weapon.cooldown and button == 1 and weapon.clip > 0) then 
                 local spread = 0.08
-                local bullet = Bullet.init(weapon.bulletType, true, weapon.x, weapon.y, x, y)
-                world:add(bullet, bullet.x, bullet.y, bullet.width, bullet.height)
-                table.insert(activeBullets, bullet)
-                local r = math.random(-100, 100)
-                local bullet2 = Bullet.init(weapon.bulletType, true, weapon.x, weapon.y, x, y)
-                world:add(bullet2, bullet2.x, bullet2.y, bullet2.width, bullet2.height)
-                bullet2.angle= bullet2.angle + ((spread/100)*r)
-                table.insert(activeBullets, bullet2)
-                r = math.random(-100, 100)
-                local bullet3 = Bullet.init(weapon.bulletType, true, weapon.x, weapon.y, x, y)
-                world:add(bullet3, bullet3.x, bullet3.y, bullet3.width, bullet3.height)
-                bullet3.angle= bullet3.angle + ((spread/100)*r)
-                table.insert(activeBullets, bullet3)
+                local shots = 3
+                local r = 0
+                while(shots > 0) do
+                    local bullet = Bullet.init(weapon.bulletType, true, weapon.x, weapon.y, x, y)
+                    if(shots < 3) then
+                        r = math.random(-100, 100)
+                        bullet.angle = bullet.angle + ((spread/100)*r)
+                    end
+                    world:add(bullet, bullet.x, bullet.y, bullet.width, bullet.height)
+                    table.insert(activeBullets, bullet)
+                    shots = shots - 1
+                end
                 weapon.clip = weapon.clip - 1
                 timerWeapon = 0
             elseif(timerWeapon >= (weapon.cooldown-1.25) and button == 2 and weapon.clip > 0) then
                 local spread = 0.16
-                local r = math.random(-100, 100)
-                local bullet = Bullet.init(weapon.bulletType, true, weapon.x, weapon.y, x, y)
-                bullet.angle = bullet.angle + ((spread/100)*r)
-                world:add(bullet, bullet.x, bullet.y, bullet.width, bullet.height)
-                table.insert(activeBullets, bullet)
-                r = math.random(-100, 100)
-                local bullet2 = Bullet.init(weapon.bulletType, true, weapon.x, weapon.y, x, y)
-                world:add(bullet2, bullet2.x, bullet2.y, bullet2.width, bullet2.height)
-                bullet2.angle= bullet2.angle + ((spread/100)*r)
-                table.insert(activeBullets, bullet2)
-                r = math.random(-100, 100)
-                local bullet3 = Bullet.init(weapon.bulletType, true, weapon.x, weapon.y, x, y)
-                world:add(bullet3, bullet3.x, bullet3.y, bullet3.width, bullet3.height)
-                bullet3.angle= bullet3.angle + ((spread/100)*r)
-                table.insert(activeBullets, bullet3)
+                local shots = 3
+                local r = 0
+                while(shots > 0) do
+                    local bullet = Bullet.init(weapon.bulletType, true, weapon.x, weapon.y, x, y)
+                    r = math.random(-100, 100)
+                    bullet.angle = bullet.angle + ((spread/100)*r)
+                    world:add(bullet, bullet.x, bullet.y, bullet.width, bullet.height)
+                    table.insert(activeBullets, bullet)
+                    shots = shots - 1
+                end
                 weapon.clip = weapon.clip - 1
                 timerWeapon = 0
             elseif(weapon.clip <= 0) then
