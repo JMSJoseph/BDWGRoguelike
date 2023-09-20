@@ -4,7 +4,7 @@ local Enemy = require("enemy")
 local Weapon = require("weapon")
 local Bullet = require("bullet")
 local bump = require("lib/bump")
-sti = require 'lib/sti'
+sti = require("lib/sti")
 local world = bump.newWorld()
 local screenWidth, screenHeight
 screenHeight = 1056
@@ -12,10 +12,12 @@ screenWidth = 1920
 local player = Player.init(screenWidth/2, screenHeight/2)
 local weapon = Weapon.init("Trench Shotgun", (player.x + 50), (player.y + 40), "buck")
 local timerWeapon = 0
+local reloadTimer = 0
 
 -- Initialize game state, variables, and libraries
 function love.load()
     -- Set up the game window
+    reloading = false
     gameMap = sti('maps/test_map.lua')
     gameMap:resize(1920,1056)
     world:add(player, player.x, player.y, player.width, player.height)
@@ -52,6 +54,15 @@ function love.update(dt)
     -- Handle player input (keyboard, mouse, etc.)
     -- Update game objects and entities
     timerWeapon = timerWeapon + dt
+    if(reloading) then
+        reloadTimer = reloadTimer + dt
+    end
+    if(reloadTimer >= weapon.reloadTime) then
+        weapon.clip = weapon.ammo
+        reloading = false
+        reloadTimer = 0
+    end
+
     weapon.x = (player.x + 50)
     weapon.y = (player.y+40)
     local vx = 0
@@ -151,6 +162,11 @@ function love.keypressed(key)
     if key == 's' then
         moveDown = true
     end
+    if key == 'y' then
+        local enemy = Enemy.init("Dummy", player.x, player.y)
+        world:add(enemy, enemy.x, enemy.y, enemy.width, enemy.height)
+        table.insert(activeEnemies, enemy)
+    end
 
 
     -- Handle player movement and actions
@@ -172,24 +188,49 @@ function love.keyreleased(key)
 
 end
 
-function weaponUse(type, x, y)
+function weaponUse(type, x, y, button)
     local typeTable =
     {
         ["Trench Shotgun"] = function()
-            local spread = 0.08
-            local bullet = Bullet.init("buck", true, weapon.x, weapon.y, x, y)
-            world:add(bullet, bullet.x, bullet.y, bullet.width, bullet.height)
-            table.insert(activeBullets, bullet)
-            local r = math.random(-100, 100)
-            local bullet2 = Bullet.init("buck", true, weapon.x, weapon.y, x, y)
-            world:add(bullet2, bullet2.x, bullet2.y, bullet2.width, bullet2.height)
-            bullet2.angle= bullet2.angle + ((spread/100)*r)
-            table.insert(activeBullets, bullet2)
-            r = math.random(-100, 100)
-            local bullet3 = Bullet.init("buck", true, weapon.x, weapon.y, x, y)
-            world:add(bullet3, bullet3.x, bullet3.y, bullet3.width, bullet3.height)
-            bullet3.angle= bullet3.angle + ((spread/100)*r)
-            table.insert(activeBullets, bullet3)
+            if(timerWeapon >= weapon.cooldown and button == 1 and weapon.clip > 0) then 
+                local spread = 0.08
+                local bullet = Bullet.init("buck", true, weapon.x, weapon.y, x, y)
+                world:add(bullet, bullet.x, bullet.y, bullet.width, bullet.height)
+                table.insert(activeBullets, bullet)
+                local r = math.random(-100, 100)
+                local bullet2 = Bullet.init("buck", true, weapon.x, weapon.y, x, y)
+                world:add(bullet2, bullet2.x, bullet2.y, bullet2.width, bullet2.height)
+                bullet2.angle= bullet2.angle + ((spread/100)*r)
+                table.insert(activeBullets, bullet2)
+                r = math.random(-100, 100)
+                local bullet3 = Bullet.init("buck", true, weapon.x, weapon.y, x, y)
+                world:add(bullet3, bullet3.x, bullet3.y, bullet3.width, bullet3.height)
+                bullet3.angle= bullet3.angle + ((spread/100)*r)
+                table.insert(activeBullets, bullet3)
+                weapon.clip = weapon.clip - 1
+                timerWeapon = 0
+            elseif(timerWeapon >= (weapon.cooldown-1.25) and button == 2 and weapon.clip > 0) then
+                local spread = 0.16
+                local r = math.random(-100, 100)
+                local bullet = Bullet.init("buck", true, weapon.x, weapon.y, x, y)
+                bullet.angle = bullet.angle + ((spread/100)*r)
+                world:add(bullet, bullet.x, bullet.y, bullet.width, bullet.height)
+                table.insert(activeBullets, bullet)
+                r = math.random(-100, 100)
+                local bullet2 = Bullet.init("buck", true, weapon.x, weapon.y, x, y)
+                world:add(bullet2, bullet2.x, bullet2.y, bullet2.width, bullet2.height)
+                bullet2.angle= bullet2.angle + ((spread/100)*r)
+                table.insert(activeBullets, bullet2)
+                r = math.random(-100, 100)
+                local bullet3 = Bullet.init("buck", true, weapon.x, weapon.y, x, y)
+                world:add(bullet3, bullet3.x, bullet3.y, bullet3.width, bullet3.height)
+                bullet3.angle= bullet3.angle + ((spread/100)*r)
+                table.insert(activeBullets, bullet3)
+                weapon.clip = weapon.clip - 1
+                timerWeapon = 0
+            elseif(weapon.clip <= 0) then
+                reloading = true
+            end
         end,
 
     }
@@ -202,15 +243,10 @@ end
 function love.mousepressed(x, y, button)
     -- Handle mouse interactions (e.g., clicking on items)
     if button == 1 then
-        if(timerWeapon >= weapon.cooldown) then
-            weaponUse(weapon.type, x, y)
-            timerWeapon = 0
-        end
+        weaponUse(weapon.type, x, y, button)
     end
     if button == 2 then
-        local enemy = Enemy.init("Dummy", player.x, player.y)
-        world:add(enemy, enemy.x, enemy.y, enemy.width, enemy.height)
-        table.insert(activeEnemies, enemy)
+        weaponUse(weapon.type, x, y, button)
     end
 end
 
