@@ -3,6 +3,7 @@ local Player = require("player")
 local Enemy = require("enemy")
 local Weapon = require("weapon")
 local Bullet = require("bullet")
+local Rooms = require("rooms")
 local bump = require("lib/bump")
 local sti = require("lib/sti")
 
@@ -10,10 +11,31 @@ local sti = require("lib/sti")
 -- Initialize game state, variables, and libraries
 function love.load()
     -- Set up the game window
+    math.randomseed(os.time())
     world = bump.newWorld()
+    map = {}
+    startRoomRow = 0
+    startRoomCol = 0
+    roomRange = math.random(13,17)
+    rooms = Rooms.init()
+    treasureRoomExists = false
+    shopRoomExists = false
+    bossRoomExists = false
+    matrixSize = 11
+    generateMapMatrix(matrixSize)
+    generateRooms(startRoomCol, startRoomRow)
+    print(printMap())
+    playerSpawn = 'default'
     screenHeight = 1056
     screenWidth = 1920
-    player = Player.init(screenWidth/2, screenHeight/2)
+    collisions = {}
+    gameMap = nil
+    curRow = startRoomRow
+    curCol = startRoomCol
+    loadMap(curRow, curCol)
+    playerSpawnObject = gameMap.layers["Player Spawn"].objects[1]
+    player = Player.init(playerSpawnObject.x,playerSpawnObject.y)
+    world:add(player, player.x, player.y, player.width, player.height)
     startingGun = Weapon.init("Trench Shotgun", 0, 0)
     startingMelee = Weapon.init("Fists", 0, 0)
     heldWeapons = {startingGun, startingMelee}
@@ -25,23 +47,6 @@ function love.load()
     tileSize = 64
     reloading = false
     meleeTimer = 0
-    gameMap = sti('maps/test_map.lua')
-    gameMap:resize(1920,1056)
-    world:add(player, player.x, player.y, player.width, player.height)
-    collisions = {}
-    for _, object in ipairs(gameMap.layers["Collisions"].objects) do
-        local collisionBox = {
-            x = object.x,
-            y = object.y,
-            width = object.width,
-            height = object.height,
-            isBox = true
-        }
-        table.insert(collisions, collisionBox)
-    end
-    for _, collision in ipairs(collisions) do
-        world:add(collision, collision.x, collision.y, collision.width, collision.height)
-    end
     activeBullets = {}
     activeEnemies = {}
     love.window.setTitle("BWDG: Ain't no Game")
@@ -55,6 +60,260 @@ function love.load()
     
     -- Initialize game data (player stats, level data, etc.)
 end
+
+function generateRooms(row, col, bannedDirections)
+    if(roomRange <= 0) then
+        return
+    end
+    local roomChoice = math.random(1, rooms.size)
+    local direction = math.random(1, 4)
+    if(row == startRoomRow and col == startRoomCol) then
+        map[row][col] = 'test_starting'
+    elseif(roomRange == 3 and treasureRoomExists == false) then
+        map[row][col] = 'test_treasure'
+    elseif(roomRange == 2 and shopRoomExists == false) then
+        map[row][col] = 'test_shop'
+    elseif(roomRange == 1 and bossRoomExists == false) then
+        map[row][col] = 'test_boss'
+    else
+        while((bossRoomExists == true and rooms[roomChoice] == 'test_boss') or (treasureRoomExists == true and rooms[roomChoice] == 'test_treasure') or (shopRoomExists == true and rooms[roomChoice] == 'test_shop')) do
+            roomChoice = math.random(1, rooms.size)
+        end
+        if(treasureRoomExists == false and rooms[roomChoice] == 'test_treasure') then
+            treasureRoomExists = true
+        end
+        if(bossRoomExists == false and rooms[roomChoice] == 'test_boss') then
+            bossRoomExists = true
+         end
+        if(shopRoomExists == false and rooms[roomChoice] == 'test_shop') then
+             shopRoomExists = true
+        end
+        map[row][col] = rooms[roomChoice]
+    end
+    if (direction == 1) then
+        if (row-1 > 0 and map[row-1][col] == '') then
+            roomRange = roomRange -1
+            generateRooms((row-1), col)
+            return
+        else
+            local i = 2
+            while((row - i > 0)) do
+                if(map[row-i][col] == '') then
+                    roomRange = roomRange - 1
+                    generateRooms((row-i), col)
+                    return
+                end
+                i = i + 1
+            end
+            generateRooms(row, col)
+            return
+        end
+    elseif(direction == 2) then
+        if (row+1 < matrixSize and map[row+1][col] == '') then
+            roomRange = roomRange -1
+            generateRooms((row+1), col)
+            return
+        else
+            local i = 2
+            while((row + i < matrixSize)) do
+                if(map[row+i][col] == '') then
+                    roomRange = roomRange - 1
+                    generateRooms((row+i), col)
+                    return
+                end
+                i = i + 1
+            end
+            generateRooms(row, col)
+            return
+        end
+    elseif(direction == 3) then
+        if (col+1 < matrixSize and map[row][col+1] == '') then
+            roomRange = roomRange -1
+            generateRooms(row, (col+1))
+            return
+        else
+            local i = 2
+            while((col + i < matrixSize)) do
+                if(map[row][col+i] == '') then
+                    roomRange = roomRange - 1
+                    generateRooms((row), (col+i))
+                    return
+                end
+                i = i + 1
+            end
+            generateRooms(row, col)
+            return
+        end
+    elseif(direction == 4) then
+        if (col-1 > 0 and map[row][col-1] == '') then
+            roomRange = roomRange - 1
+            generateRooms(row, (col-1))
+            return
+        else
+            local i = 2
+            while((col - i > 0)) do
+                if(map[row][col-i] == '') then
+                    roomRange = roomRange - 1
+                    generateRooms((row), (col-i))
+                    return
+                end
+                i = i + 1
+            end
+            generateRooms(row, col)
+            return
+        end
+    end
+end
+
+function generateMapMatrix(size)
+    for i=1, size do
+      map[i] = {}     -- create a new row
+      for j=1, size do
+        map[i][j] = ''
+      end
+    end
+    startRoomCol = math.ceil(size/2)
+    startRoomRow = startRoomCol
+end
+
+function printMap()
+    local toString = ''
+    for i=1, matrixSize do
+        for j=1, matrixSize do
+            toString = toString .. j .. map[i][j] .. ' '
+        end
+        toString = toString .. '\n'
+    end
+    return toString
+end
+
+function loadMap(row, col)
+    print(row)
+    print(col)
+    local loadedMap = map[row][col]
+    local name = 'maps/' .. loadedMap ..'.lua'
+    gameMap = sti(name)
+    gameMap:resize(1920,1056)
+    for _, object in ipairs(gameMap.layers["Collisions"].objects) do
+        local collisionBox = {
+            x = object.x,
+            y = object.y,
+            width = object.width,
+            height = object.height,
+            isBox = true
+        }
+        table.insert(collisions, collisionBox)
+    end
+    for _, object in ipairs(gameMap.layers["Top Exit"].objects) do
+        local collisionBox = {
+            x = object.x,
+            y = object.y,
+            width = object.width,
+            height = object.height,
+            isTopExit = true
+        }
+        table.insert(collisions, collisionBox)
+    end
+    for _, object in ipairs(gameMap.layers["Bottom Exit"].objects) do
+        local collisionBox = {
+            x = object.x,
+            y = object.y,
+            width = object.width,
+            height = object.height,
+            isBottomExit = true
+        }
+        table.insert(collisions, collisionBox)
+    end
+    for _, object in ipairs(gameMap.layers["Right Exit"].objects) do
+        local collisionBox = {
+            x = object.x,
+            y = object.y,
+            width = object.width,
+            height = object.height,
+            isRightExit = true
+        }
+        table.insert(collisions, collisionBox)
+    end
+    for _, object in ipairs(gameMap.layers["Left Exit"].objects) do
+        local collisionBox = {
+            x = object.x,
+            y = object.y,
+            width = object.width,
+            height = object.height,
+            isLeftExit = true
+        }
+        table.insert(collisions, collisionBox)
+    end
+    if((row-1) <= 0 or map[row-1][col] == "") then
+        for _, object in ipairs(gameMap.layers["Top Blocked"].objects) do
+            local collisionBox = {
+                x = object.x,
+                y = object.y,
+                width = object.width,
+                height = object.height,
+                isBox = true
+            }
+            table.insert(collisions, collisionBox)
+        end
+        gameMap.layers["Closed Top"].visible = true
+    end
+    if((row+1) >= matrixSize or map[row+1][col] == "") then
+        for _, object in ipairs(gameMap.layers["Bottom Blocked"].objects) do
+            local collisionBox = {
+                x = object.x,
+                y = object.y,
+                width = object.width,
+                height = object.height,
+                isBox = true
+            }
+            table.insert(collisions, collisionBox)
+        end
+        gameMap.layers["Closed Bottom"].visible = true
+    end
+    if((col-1) <= 0 or map[row][col-1] == "") then
+        for _, object in ipairs(gameMap.layers["Left Blocked"].objects) do
+            local collisionBox = {
+                x = object.x,
+                y = object.y,
+                width = object.width,
+                height = object.height,
+                isBox = true
+            }
+            table.insert(collisions, collisionBox)
+        end
+        gameMap.layers["Closed Left"].visible = true
+    end
+    if((col+1) >= matrixSize or map[row][col+1] == "") then
+        for _, object in ipairs(gameMap.layers["Right Blocked"].objects) do
+            local collisionBox = {
+                x = object.x,
+                y = object.y,
+                width = object.width,
+                height = object.height,
+                isBox = true
+            }
+            table.insert(collisions, collisionBox)
+        end
+        gameMap.layers["Closed Right"].visible = true
+    end
+    for _, collision in ipairs(collisions) do
+        world:add(collision, collision.x, collision.y, collision.width, collision.height)
+    end
+    moveLeft = false
+    moveRight = false
+    moveDown = false
+    moveUp = false
+end
+
+function unloadMap()
+    for _, object in ipairs(collisions) do
+        world:remove(object)
+    end
+    collisions = {}
+    activeBullets = {}
+    activeEnemies = {}
+end
+
 
 -- Update game logic (e.g., player movement, enemy AI)
 function love.update(dt)
@@ -118,6 +377,10 @@ function love.keypressed(key)
         local enemy = Enemy.init("Chaser", (player.x + 128), player.y)
         world:add(enemy, enemy.x, enemy.y, enemy.width, enemy.height)
         table.insert(activeEnemies, enemy)
+    end
+    if key == 'z' then
+        unloadMap()
+        loadMap("test_map")
     end
 
 
@@ -246,6 +509,10 @@ function weaponUse(type, x, y, button)
 end
 
 function playerMovement(dt)
+    local exitedTop = false
+    local exitedBottom = false
+    local exitedRight = false
+    local exitedLeft = false
     local vx = 0
     local vy = 0
     if moveLeft then
@@ -268,9 +535,51 @@ function playerMovement(dt)
     end
     local newX, newY, cols, len = world:move(player, player.x + vx, player.y + vy, playerCollisionFilter)
     player.x, player.y = newX, newY
-    for _, col in ipairs(cols) do
-        
-    end 
+    for i=1,len do
+        if not(cols[i].other.isTopExit == nil) then
+            exitedTop = true
+        elseif not(cols[i].other.isBottomExit == nil) then
+            exitedBottom = true
+        elseif not(cols[i].other.isLeftExit == nil) then
+            exitedLeft = true
+        elseif not(cols[i].other.isRightExit == nil) then
+            exitedRight = true
+        end
+    end
+        if(exitedTop) then
+            unloadMap()
+            curRow = curRow - 1
+            loadMap(curRow, curCol)
+            playerSpawnObject = gameMap.layers["Bottom Enter"].objects[1]
+            player.x = playerSpawnObject.x
+            player.y = playerSpawnObject.y
+            world:update(player, player.x, player.y, player.width, player.height)
+        elseif(exitedBottom) then
+            unloadMap()
+            curRow = curRow + 1
+            loadMap(curRow, curCol)
+            playerSpawnObject = gameMap.layers["Top Enter"].objects[1]
+            player.x = playerSpawnObject.x
+            player.y = playerSpawnObject.y
+            world:update(player, player.x, player.y, player.width, player.height)
+        elseif(exitedRight) then
+            unloadMap()
+            curCol = curCol + 1
+            loadMap(curRow, curCol)
+            playerSpawnObject = gameMap.layers["Left Enter"].objects[1]
+            player.x = playerSpawnObject.x
+            player.y = playerSpawnObject.y
+            world:update(player, player.x, player.y, player.width, player.height)
+        elseif(exitedLeft) then
+            unloadMap()
+            curCol = curCol - 1
+            loadMap(curRow, curCol)
+            playerSpawnObject = gameMap.layers["Right Enter"].objects[1]
+            player.x = playerSpawnObject.x
+            player.y = playerSpawnObject.y
+            world:update(player, player.x, player.y, player.width, player.height)
+        end
+
 end
 
 function bulletLogic(dt)
