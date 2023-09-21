@@ -25,6 +25,7 @@ function Bullet.init(type, good, startX, startY, targetX, targetY)
         bullet.width = bullet.sprite:getWidth()
         bullet.height = bullet.sprite:getHeight()
         bullet.damage = 5
+        bullet.isMelee = true
     end
 
     return bullet

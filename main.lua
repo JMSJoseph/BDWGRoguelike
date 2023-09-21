@@ -14,7 +14,12 @@ function love.load()
     screenHeight = 1056
     screenWidth = 1920
     player = Player.init(screenWidth/2, screenHeight/2)
-    weapon = Weapon.init("Trench Shotgun", 0, 0)
+    startingGun = Weapon.init("Trench Shotgun", 0, 0)
+    startingMelee = Weapon.init("Fists", 0, 0)
+    heldWeapons = {startingGun, startingMelee}
+    weapon = heldWeapons[1]
+    hands = 2
+    heldIndex = 1
     timerWeapon = 0
     reloadTimer = 0
     tileSize = 64
@@ -55,6 +60,7 @@ end
 function love.update(dt)
     -- Handle player input (keyboard, mouse, etc.)
     -- Update game objects and entities
+    weapon = heldWeapons[1]
     weaponLogic(dt)
     weaponPosition(dt, weapon.type)
     playerMovement(dt)
@@ -113,6 +119,30 @@ function love.keypressed(key)
     -- Handle player movement and actions
 end
 
+function love.wheelmoved( x, y )
+    if (y > 0) then
+        local newTable = {}
+        local j = 1
+        newTable[hands] = heldWeapons[1]
+        for i = 2, hands do
+            newTable[j] = heldWeapons[i]
+            j = j + 1
+        end
+        heldWeapons = newTable
+
+    end
+    if (y < 0) then
+        local newTable = {}
+        local j = 1
+        newTable[1] = heldWeapons[hands]
+        for i = 1, (hands-1) do
+            newTable[i+1] = heldWeapons[i]
+        end
+        heldWeapons = newTable
+
+    end
+end
+
 function love.keyreleased(key)
     if key == 'a' then
         moveLeft = false
@@ -137,7 +167,13 @@ function weaponPosition(dt, type)
             weaponY = (player.y+(player.height/3))
             weapon.x = weaponX
             weapon.y = weaponY
-        end,  
+        end,
+        ["Fists"] = function()
+            weaponX = (player.x+(player.width/2) - (tileSize/6.4))
+            weaponY = (player.y+(player.height/2))
+            weapon.x = weaponX
+            weapon.y = weaponY
+        end,
     }
     if (typeTable[type]) then
         typeTable[type]()
@@ -237,7 +273,7 @@ function bulletLogic(dt)
     for i = #activeBullets, 1, -1 do
         local curBullet = activeBullets[i]
         local remove = false
-        if(not(weapon.isMelee == nil)) then
+        if(not(weapon.isMelee == nil) and not(curBullet.isMelee == nil)) then
             local distanceSquared = ((curBullet.x - weapon.x)^2 + (curBullet.y - weapon.y)^2)^0.5
             if (distanceSquared >= weapon.range * tileSize) then
                 remove = true
