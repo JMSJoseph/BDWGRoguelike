@@ -114,6 +114,11 @@ function love.keypressed(key)
         world:add(enemy, enemy.x, enemy.y, enemy.width, enemy.height)
         table.insert(activeEnemies, enemy)
     end
+    if key == 'u' then
+        local enemy = Enemy.init("Chaser", (player.x + 128), player.y)
+        world:add(enemy, enemy.x, enemy.y, enemy.width, enemy.height)
+        table.insert(activeEnemies, enemy)
+    end
 
 
     -- Handle player movement and actions
@@ -139,7 +144,6 @@ function love.wheelmoved( x, y )
             newTable[i+1] = heldWeapons[i]
         end
         heldWeapons = newTable
-
     end
 end
 
@@ -304,11 +308,46 @@ end
 
 function enemyLogic(dt)
     for i = #activeEnemies, 1, -1 do
-        if(activeEnemies[i].health <= 0) then
-            world:remove(activeEnemies[i])
+        local remove = false
+        local curEnemy = activeEnemies[i]
+        enemyAI(curEnemy, dt)
+        if(curEnemy.health <= 0) then
+            remove = true
+        end
+        if(remove) then
+            world:remove(curEnemy)
             table.remove(activeEnemies, i)
         end
+
     end
+end
+
+function enemyAI(curEnemy, dt)
+    local type = curEnemy.type
+    local typeTable =
+    {
+        ["Dummy"] = function()
+        end,
+        ["Chaser"] = function()
+            local angle = math.atan2((player.y - curEnemy.y), (player.x - curEnemy.x))
+            local vx = (curEnemy.speed*dt)*(math.cos(angle))
+            local vy = (curEnemy.speed*dt)*(math.sin(angle))
+            local function enemyCollisionFilter(item, other)
+                if other.isBox then
+                    return 'slide'
+                end
+                return 'cross'
+            end
+            local newX, newY, cols, len = world:move(curEnemy, curEnemy.x + vx, curEnemy.y + vy, enemyCollisionFilter)
+            curEnemy.x, curEnemy.y = newX, newY
+            for i=1,len do
+
+            end
+        end,
+    }
+    if (typeTable[type]) then
+        typeTable[type]()
+    end 
 end
 
 function weaponLogic(dt)
