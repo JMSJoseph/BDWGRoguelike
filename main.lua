@@ -4,15 +4,21 @@ local Enemy = require("enemy")
 local Weapon = require("weapon")
 local Bullet = require("bullet")
 local Rooms = require("rooms")
+local PathMap = require("pathMap")
 local bump = require("lib/bump")
 local sti = require("lib/sti")
+local Grid = require ("lib.jumper.grid") -- The grid class
+local Pathfinder = require ("lib.jumper.pathfinder") -- The pathfinder class
 
 
 -- Initialize game state, variables, and libraries
 function love.load()
     -- Set up the game window
     math.randomseed(os.time())
+    frames = 0
     world = bump.newWorld()
+    healthSprite = nil
+    faceSprite = nil
     map = {}
     startRoomRow = 0
     startRoomCol = 0
@@ -22,6 +28,7 @@ function love.load()
     shopRoomExists = false
     bossRoomExists = false
     matrixSize = 11
+    centerTest = love.graphics.newImage("sprites/player/centertest.png")
     generateMapMatrix(matrixSize)
     generateRooms(startRoomCol, startRoomRow)
     print(printMap())
@@ -35,7 +42,7 @@ function love.load()
     loadMap(curRow, curCol)
     playerSpawnObject = gameMap.layers["Player Spawn"].objects[1]
     player = Player.init(playerSpawnObject.x,playerSpawnObject.y)
-    world:add(player, player.x, player.y, player.width, player.height)
+    world:add(player, (player.x - player.width/2 + player.width/10.5 ), (player.y - player.height/2 + player.height/7.5), (player.width*.8), (player.height*.8))
     startingGun = Weapon.init("Trench Shotgun", 0, 0)
     startingMelee = Weapon.init("Fists", 0, 0)
     heldWeapons = {startingGun, startingMelee}
@@ -61,7 +68,7 @@ function love.load()
     -- Initialize game data (player stats, level data, etc.)
 end
 
-function generateRooms(row, col, bannedDirections)
+function generateRooms(row, col)
     if(roomRange <= 0) then
         return
     end
@@ -309,6 +316,12 @@ function unloadMap()
     for _, object in ipairs(collisions) do
         world:remove(object)
     end
+    for i = #activeEnemies, 1, -1 do
+        world:remove(activeEnemies[i])
+    end
+    for i = #activeBullets, 1, -1 do
+        world:remove(activeBullets[i])
+    end
     collisions = {}
     activeBullets = {}
     activeEnemies = {}
@@ -320,6 +333,7 @@ function love.update(dt)
     -- Handle player input (keyboard, mouse, etc.)
     -- Update game objects and entities
     weapon = heldWeapons[1]
+    uiSprites()
     weaponLogic(dt)
     weaponPosition(dt, weapon.type)
     playerMovement(dt)
@@ -332,20 +346,33 @@ function love.update(dt)
     -- Handle game events (e.g., player actions, enemy actions)
 end
 
+function uiSprites()
+    healthSprite = love.graphics.newImage("sprites/ui/placeholder_hp.png")
+    faceSprite = love.graphics.newImage("sprites/ui/default_face.png")
+end
+
 -- Render the game world
 function love.draw()
     gameMap:draw()
-    love.graphics.print("Player HP: " .. player.health, 0, 0)
+    love.graphics.draw(faceSprite, 0, 0)
+    love.graphics.draw(healthSprite, (tileSize*1.5), 0)
+    love.graphics.print({{0,0,0,1}, player.health}, (tileSize*1.875), (tileSize/3))
     for _, bullet in ipairs(activeBullets) do
         love.graphics.draw(bullet.sprite, bullet.x, bullet.y)
     end
-    love.graphics.draw(player.sprite, player.x, player.y)
+    love.graphics.draw(player.sprite, player.x, player.y, 0, 1 ,1 ,player.width/2, player.height/2)
+    love.graphics.draw(centerTest, player.x ,player.y)
     for _, enemy in ipairs(activeEnemies) do
-        love.graphics.draw(enemy.sprite, enemy.x, enemy.y)
-        love.graphics.print("HP: " .. enemy.health, enemy.x, enemy.y - 10)
+        love.graphics.draw(enemy.sprite, enemy.x, enemy.y,0, 1 ,1 ,enemy.width/2, enemy.height/2)
+        love.graphics.print({{0,0,0,1}, ("HP: " .. enemy.health)}, enemy.x, enemy.y - 10)
     end
     if(weapon.isMelee == nil) then
         love.graphics.draw(weapon.sprite, weapon.x, weapon.y)
+    end
+    local items, len = world:getItems()
+    for i = 1, len do
+        local x, y, w, h = world:getRect(items[i])
+        love.graphics.rectangle("line", x, y, w, h)
     end
     -- Draw the game map
     
@@ -375,14 +402,10 @@ function love.keypressed(key)
     end
     if key == 'u' then
         local enemy = Enemy.init("Chaser", (player.x + 128), player.y)
-        world:add(enemy, enemy.x, enemy.y, enemy.width, enemy.height)
+        enemy.pathTimer = enemy.pathTimerInital
+        world:add(enemy, (enemy.x - enemy.width/2 + enemy.width/10.5 ), (enemy.y - enemy.height/2 + enemy.height/7.5), (enemy.width*.8), (enemy.height*.8))
         table.insert(activeEnemies, enemy)
     end
-    if key == 'z' then
-        unloadMap()
-        loadMap("test_map")
-    end
-
 
     -- Handle player movement and actions
 end
@@ -430,14 +453,14 @@ function weaponPosition(dt, type)
     local typeTable =
     {
         ["Trench Shotgun"] = function()
-            weaponX = (player.x+(player.width/1.3))
-            weaponY = (player.y+(player.height/3))
+            weaponX = (player.x + (tileSize/4))
+            weaponY = (player.y - (tileSize/4))
             weapon.x = weaponX
             weapon.y = weaponY
         end,
         ["Fists"] = function()
-            weaponX = (player.x+(player.width/2) - (tileSize/6.4))
-            weaponY = (player.y+(player.height/2))
+            weaponX = (player.x)
+            weaponY = (player.y)
             weapon.x = weaponX
             weapon.y = weaponY
         end,
@@ -533,8 +556,8 @@ function playerMovement(dt)
         end
         return 'cross' 
     end
-    local newX, newY, cols, len = world:move(player, player.x + vx, player.y + vy, playerCollisionFilter)
-    player.x, player.y = newX, newY
+    local newX, newY, cols, len = world:move(player, (player.x - player.width/2 + player.width/10.5) + vx, (player.y - player.height/2 + player.height/7.5) + vy, playerCollisionFilter)
+    player.x, player.y = (newX + -(-(player.width/2) + player.width/10.5)), (newY + -(-(player.height/2) + player.height/7.5))
     for i=1,len do
         if not(cols[i].other.isTopExit == nil) then
             exitedTop = true
@@ -553,7 +576,7 @@ function playerMovement(dt)
             playerSpawnObject = gameMap.layers["Bottom Enter"].objects[1]
             player.x = playerSpawnObject.x
             player.y = playerSpawnObject.y
-            world:update(player, player.x, player.y, player.width, player.height)
+            world:update(player, (player.x - player.width/2 + player.width/10.5 ), (player.y - player.height/2 + player.height/7.5), (player.width*.8), (player.height*.8))
         elseif(exitedBottom) then
             unloadMap()
             curRow = curRow + 1
@@ -561,7 +584,7 @@ function playerMovement(dt)
             playerSpawnObject = gameMap.layers["Top Enter"].objects[1]
             player.x = playerSpawnObject.x
             player.y = playerSpawnObject.y
-            world:update(player, player.x, player.y, player.width, player.height)
+            world:update(player, (player.x - player.width/2 + player.width/10.5 ), (player.y - player.height/2 + player.height/7.5), (player.width*.8), (player.height*.8))
         elseif(exitedRight) then
             unloadMap()
             curCol = curCol + 1
@@ -569,7 +592,7 @@ function playerMovement(dt)
             playerSpawnObject = gameMap.layers["Left Enter"].objects[1]
             player.x = playerSpawnObject.x
             player.y = playerSpawnObject.y
-            world:update(player, player.x, player.y, player.width, player.height)
+            world:update(player, (player.x - player.width/2 + player.width/10.5 ), (player.y - player.height/2 + player.height/7.5), (player.width*.8), (player.height*.8))
         elseif(exitedLeft) then
             unloadMap()
             curCol = curCol - 1
@@ -577,10 +600,12 @@ function playerMovement(dt)
             playerSpawnObject = gameMap.layers["Right Enter"].objects[1]
             player.x = playerSpawnObject.x
             player.y = playerSpawnObject.y
-            world:update(player, player.x, player.y, player.width, player.height)
+            world:update(player, (player.x - player.width/2 + player.width/10.5 ), (player.y - player.height/2 + player.height/7.5), (player.width*.8), (player.height*.8))
         end
 
 end
+
+
 
 function bulletLogic(dt)
     for i = #activeBullets, 1, -1 do
@@ -603,6 +628,7 @@ function bulletLogic(dt)
             if not(cols[i].other.isEnemy == nil) then
                 cols[i].other.health = cols[i].other.health - curBullet.damage
                 remove = true
+            end
             elseif not(cols[i].other.isBox == nil) then
                 remove = true
             end
@@ -619,6 +645,7 @@ function enemyLogic(dt)
     for i = #activeEnemies, 1, -1 do
         local remove = false
         local curEnemy = activeEnemies[i]
+        curEnemy.pathTimer = curEnemy.pathTimer + dt
         enemyAI(curEnemy, dt)
         if(curEnemy.health <= 0) then
             remove = true
@@ -636,28 +663,111 @@ function enemyAI(curEnemy, dt)
     local typeTable =
     {
         ["Dummy"] = function()
+            curEnemy.pathTimer = 0
         end,
         ["Chaser"] = function()
-            local angle = math.atan2((player.y - curEnemy.y), (player.x - curEnemy.x))
-            local vx = (curEnemy.speed*dt)*(math.cos(angle))
-            local vy = (curEnemy.speed*dt)*(math.sin(angle))
-            local function enemyCollisionFilter(item, other)
-                if other.isBox then
-                    return 'slide'
+            local targetX = player.x
+            local targetY = player.y
+            if(curEnemy.pathTimer >= curEnemy.pathTimerInital) then
+                curEnemy.currentNode = 2
+                curEnemy.path = calculatePath(curEnemy.x, (curEnemy.y), player.x, player.y)
+                --print("calced")
+                curEnemy.pathTimer = 0
+            end
+            if(  (((targetX-curEnemy.x) ^ 2 + (targetY-curEnemy.y) ^2))^.5 > (0.8 * (tileSize)) or curEnemy.path ~= nil) then
+                if curEnemy.path and curEnemy.path:getLength() > 0 then
+                    local nextWaypointIndex = curEnemy.currentNode
+                    local nextWaypointNode = nil
+                    for node, count in curEnemy.path:nodes() do
+                        if (count == curEnemy.currentNode) then
+                            nextWaypointNode = node
+                        end
+                    end
+                    local nextWaypoint = 
+                    {
+                        x = nextWaypointNode:getX(),
+                        y = nextWaypointNode:getY()
+                    }
+                    targetX = nextWaypoint.x * (tileSize/4)
+                    targetY = nextWaypoint.y * (tileSize/4)
+                    if math.abs(curEnemy.x - targetX) < 1 and math.abs(curEnemy.y - targetY) < 1 then
+                        --print("yes")
+                        curEnemy.currentNode = curEnemy.currentNode + 1
+                        local testCount = 0
+                        for node, count in curEnemy.path:nodes() do
+                            testCount = count
+                        end
+                        if(curEnemy.currentNode >= testCount) then
+                            curEnemy.currentNode = testCount
+                            curEnemy.path = nil
+                        end
+                    end
                 end
-                return 'cross'
             end
-            local newX, newY, cols, len = world:move(curEnemy, curEnemy.x + vx, curEnemy.y + vy, enemyCollisionFilter)
-            curEnemy.x, curEnemy.y = newX, newY
-            for i=1,len do
+                local angle = math.atan2((targetY - curEnemy.y), ((targetX - curEnemy.x)))
+                local vx = (curEnemy.speed*dt)*(math.cos(angle))
+                local vy = (curEnemy.speed*dt)*(math.sin(angle))
+                local function enemyCollisionFilter(item, other)
+                    if other.isBox then
+                        return 'slide'
+                    end
+                    return 'cross'
+                    end
+                local newX, newY, cols, len = world:move(curEnemy, (curEnemy.x - curEnemy.width/2 + curEnemy.width/10.5) + vx, (curEnemy.y - curEnemy.height/2 + curEnemy.height/7.5) + vy, enemyCollisionFilter)
+                curEnemy.x, curEnemy.y = (newX + -(-(curEnemy.width/2) + curEnemy.width/10.5)), (newY + -(-(curEnemy.height/2) + curEnemy.height/7.5))
+                for i=1,len do
+                    --if not(cols[i].other.isPlayer == nil) then
+                      --  hitKnockback(cols[i].other, player, dt)
+                    --end
+                end
 
-            end
         end,
     }
     if (typeTable[type]) then
         typeTable[type]()
     end 
 end
+
+function calculatePath(preX, preY, preTargetX, preTargetY)
+    local curMap = PathMap.init(map[curRow][curCol])
+    local pathMap = curMap.map
+    local x = math.floor((preX/(tileSize/4))+0.5)
+    local y = math.floor((preY/(tileSize/4))+0.5)
+    --print("x" .. x .. ", y:" .. y )
+    local targetX = math.floor((preTargetX/(tileSize/4))+0.5)
+    local targetY = math.floor((preTargetY/(tileSize/4))+0.5)
+    if(pathMap[targetY][targetX] == 3) then
+        targetX, targetY = findValidTile(pathMap, targetX, targetY)
+    end
+  --  print("X " .. targetX .. " Y " .. targetY)
+  --  print("Targetx" .. targetX .. ", Targety:" .. targetY )
+    local walkable = 4
+    local grid = Grid(pathMap)
+    local myFinder = Pathfinder(grid, 'JPS', walkable)
+    local path = myFinder:getPath(x, y, targetX, targetY)
+    --if path then
+       -- print(('Path found! Length: %.2f'):format(path:getLength()))
+       -- for node, count in path:nodes() do
+       --     print(('Step: %d - x: %d - y: %d'):format(count, node:getX(), node:getY()))
+     --   end
+  --  end
+    return path
+end
+
+function findValidTile(array, preX, preY)
+    radius = 3
+    for dx = -radius, radius do
+        for dy = -radius, radius do
+            local x = preX + dx
+            local y = preY + dy
+            if (array[y][x] ~= nil and array[y][x] == 4) then
+                return x,y
+            end
+        end
+    end
+    return preX, preY
+end
+
 
 function weaponLogic(dt)
     timerWeapon = timerWeapon + dt

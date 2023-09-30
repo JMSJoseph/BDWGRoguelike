@@ -6,7 +6,7 @@ function Player.init(startX, startY)
             health = 40,
             x = startX,
             y = startY,
-            speed = 300,
+            speed = 900,
             isPlayer = true,
             sprite = love.graphics.newImage("sprites/player/placeholder_player.png")
     }

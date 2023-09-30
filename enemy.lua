@@ -6,11 +6,16 @@ function Enemy.init(type, startX, startY)
         type = type,
         x = startX,
         y = startY,
-        isEnemy = true
+        isEnemy = true,
+        path = nil,
+        pathTimer = 0,
+        pathTimerInital = 1,
+        currentNode = 2
     }
 
     if(type == "Dummy") then
         enemy.health = 40
+        enemy.speed = 0
         enemy.sprite = love.graphics.newImage("sprites/enemies/placeholder_dummy.png")
         enemy.width = enemy.sprite:getWidth()
         enemy.height = enemy.sprite:getHeight()
