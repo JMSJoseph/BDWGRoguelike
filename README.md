@@ -12,4 +12,4 @@ DWGRoguelike was a small attempt at an roguelike game I made in Love2D. It is si
 
 ## Private Repo
 
-Currently, this repo is old, and i have ported this over to Godot. Making huge improvements in UI, including an inventory system and building system like Noita and I am currently working on the item system and signal refactoring
+Currently, this repo is old, and i have ported this over to Godot. Making huge improvements in UI, including an inventory system and building system like Noita and I am currently working on the item system and signal refactoring. Demo Avaliable on request
